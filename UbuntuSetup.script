@@ -1,0 +1,70 @@
+#!/bin/bash
+
+# Update and upgrade the system
+sudo apt update && sudo apt upgrade -y
+
+# Install common utilities
+sudo apt install -y curl wget git vim htop net-tools tree unzip zip gnupg lsof
+
+# Install build tools
+sudo apt install -y build-essential cmake gcc g++ make
+
+# Install networking tools
+sudo apt install -y net-tools iputils-ping traceroute dnsutils tcpdump nmap socat
+
+# Install system monitoring tools
+sudo apt install -y sysstat dstat iotop iftop
+
+# Install version control (Git)
+sudo apt install -y git
+
+# Install and start SSH server
+sudo apt install -y openssh-server
+sudo systemctl enable ssh
+sudo systemctl start ssh
+
+# Install Python and Pip
+sudo apt install -y python3 python3-pip
+
+# Install Docker
+sudo apt install -y docker.io
+sudo systemctl enable docker
+sudo systemctl start docker
+
+# Install tmux for terminal multiplexing
+sudo apt install -y tmux
+
+# Install Zsh and Oh-My-Zsh (optional)
+sudo apt install -y zsh
+sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
+
+# Install Java (optional)
+sudo apt install -y default-jdk
+
+# Install Node.js and npm (optional)
+curl -fsSL https://deb.nodesource.com/setup_16.x | sudo -E bash -
+sudo apt install -y nodejs
+
+# Install PostgreSQL (optional)
+sudo apt install -y postgresql postgresql-contrib
+
+# Install MySQL (optional)
+sudo apt install -y mysql-server
+sudo systemctl start mysql
+sudo systemctl enable mysql
+
+# Install Kubernetes tools (optional)
+sudo apt install -y kubelet kubeadm kubectl
+
+# Clean up
+sudo apt autoremove -y
+sudo apt clean
+
+#Replace ll to -ltra
+sed -i "s/alias ll=.*/alias ll='ls -ltra'/" ~/.bashrc
+
+# Reload shell configurations
+source ~/.bashrc
+
+
+echo "Setup complete! Please restart your terminal for all changes to take effect."
