@@ -12,5 +12,7 @@ spec:
   - action: Allow
     protocol: TCP
     destination:
-      selector: app == "ratings"
+      services:
+        name: ratings
+        namespace: dev1
       ports: [9080]

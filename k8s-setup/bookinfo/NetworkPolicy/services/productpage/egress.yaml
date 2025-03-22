@@ -9,15 +9,19 @@ spec:
   order: 200
   selector: app == "productpage"
   egress:
-  # Allow access to all reviews versions
+  # Allow access to reviews service
   - action: Allow
     protocol: TCP
     destination:
-      selector: app == "reviews"
+      services:
+        name: reviews
+        namespace: dev1
       ports: [9080]
-  # Allow access to details service
+  # Allow access to details service  
   - action: Allow
     protocol: TCP
     destination:
-      selector: app == "details"
+      services:
+        name: details
+        namespace: dev1
       ports: [9080]

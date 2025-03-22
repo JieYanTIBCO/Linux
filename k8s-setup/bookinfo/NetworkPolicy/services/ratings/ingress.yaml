@@ -9,9 +9,19 @@ spec:
   order: 500
   selector: app == "ratings"
   ingress:
+  # Allow traffic from specific reviews pod versions
   - action: Allow
     protocol: TCP
     source:
       selector: app == "reviews" && version in {"v2", "v3"}
+    destination:
+      ports: [9080]
+  # Allow traffic from the reviews service
+  - action: Allow
+    protocol: TCP
+    source:
+      services:
+        name: reviews
+        namespace: dev1
     destination:
       ports: [9080]

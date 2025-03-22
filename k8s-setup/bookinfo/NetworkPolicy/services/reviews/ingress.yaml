@@ -1,4 +1,4 @@
-# Allow ingress traffic from productpage to reviews service
+# Allow ingress traffic from productpage service to reviews service
 apiVersion: projectcalico.org/v3
 kind: NetworkPolicy
 metadata:
@@ -12,6 +12,8 @@ spec:
   - action: Allow
     protocol: TCP
     source:
-      selector: app == "productpage"
+      services:
+        name: productpage
+        namespace: dev1
     destination:
       ports: [9080]

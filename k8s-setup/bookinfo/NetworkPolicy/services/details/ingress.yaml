@@ -12,6 +12,8 @@ spec:
   - action: Allow
     protocol: TCP
     source:
-      selector: app == "productpage"
+      services:
+        name: productpage
+        namespace: dev1
     destination:
       ports: [9080]
