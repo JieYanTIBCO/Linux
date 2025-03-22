@@ -1,0 +1,13 @@
+apiVersion: projectcalico.org/v3
+kind: NetworkPolicy
+metadata:
+  name: temp-allow-all
+  namespace: dev1
+spec:
+  tier: default
+  order: 1
+  selector: all()
+  ingress:
+  - action: Allow
+  egress:
+  - action: Allow

@@ -133,11 +133,13 @@ alias kgp='kubectl get pods'
 alias kgn='kubectl get nodes'
 alias kd='kubectl describe'
 alias ll='ls -ltra'
+export CALICO_CONFIG="$HOME/.kube/calicoctl.cfg"
 
 tc() {
   local namespace="dev1"
+  local TIMEOUT=5  # Set global timeout to 5 seconds
 
-  # ?? 1: ?? Pod ? Shell(???)
+  # Case 1: Connect to Pod Shell
   if [ $# -eq 1 ]; then
     local pod_prefix="$1"
     local pod_name=$(kubectl get pods -n "$namespace" --no-headers -o custom-columns=":metadata.name" | grep "^${pod_prefix}-" | head -n 1)
@@ -148,45 +150,45 @@ tc() {
     fi
 
     echo "Connecting to pod: $pod_name"
-    kubectl exec -it -n "$namespace" "$pod_name" -- /bin/sh
+    timeout $TIMEOUT kubectl exec -it -n "$namespace" "$pod_name" -- /bin/sh
 
-  # ?? 2: ???????(???)
+  # Case 2: Check connectivity
   elif [ $# -eq 3 ]; then
     local pod_prefix="$1"
-    local target="$2"  # ??????? IP ??
+    local target="$2"  # Service name or IP address
     local port="$3"
 
-    # ?????????
+    # Validate port is a number
     if ! [[ "$port" =~ ^[0-9]+$ ]]; then
       echo "Error: Port must be a number"
       return 1
     fi
 
-    # ???? Pod ??
+    # Find the pod
     local pod_name=$(kubectl get pods -n "$namespace" --no-headers -o custom-columns=":metadata.name" | grep "^${pod_prefix}-" | head -n 1)
     if [ -z "$pod_name" ]; then
       echo "Error: No pod found with prefix '$pod_prefix' in namespace $namespace"
       return 1
     fi
 
-    # ?? target ??? IP ??
+    # Determine if target is IP or service name
     local target_address
     if [[ "$target" =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]; then
       target_address="$target"
     else
-      # ???????,?? FQDN
+      # If it's a service name, form FQDN
       target_address="${target}.${namespace}.svc.cluster.local"
     fi
 
-    echo "Checking connectivity from pod: $pod_name to ${target_address}:${port}"
+    echo "Checking connectivity from pod: $pod_name to ${target_address}:${port} (timeout: ${TIMEOUT}s)"
 
-    # ??????
-    kubectl exec -n "$namespace" "$pod_name" -- sh -c "
+        # Run connectivity test with timeout
+    timeout $TIMEOUT kubectl exec -n "$namespace" "$pod_name" -- sh -c "
       if command -v nc >/dev/null 2>&1; then
-        nc -zv ${target_address} ${port}
+        timeout $TIMEOUT nc -zvw $TIMEOUT ${target_address} ${port}
       else
         echo 'Warning: nc not found, trying /dev/tcp method...'
-        timeout 3 bash -c \"</dev/tcp/${target_address}/${port}\" 2>/dev/null
+        timeout $TIMEOUT bash -c \"</dev/tcp/${target_address}/${port}\" 2>/dev/null
         if [ \$? -eq 0 ]; then
           echo \"Port ${port} is open\"
         else
@@ -195,8 +197,16 @@ tc() {
         fi
       fi
     "
+    RESULT=$?
+    
+    # Check for timeout
+    if [ $RESULT -eq 124 ]; then
+      echo "Error: Connection timed out from $pod_name to ${target_address}:${port}"
+    elif [ $RESULT -ne 0 ]; then
+      echo "Error: Cannot connect from $pod_name to ${target_address}:${port}"
+    fi
 
-  # ????
+  # Invalid usage
   else
     echo "Usage:"
     echo "  Connect to pod:        tc <pod-prefix>"

@@ -12,11 +12,7 @@ spec:
   - action: Allow
     protocol: TCP
     source:
-      podSelector:
-        matchLabels:
-          app.kubernetes.io/name: ingress-nginx
-      namespaceSelector:
-        matchLabels:
-          kubernetes.io/metadata.name: ingress-nginx
+      selector: app.kubernetes.io/name == 'ingress-nginx'
+      namespaceSelector: kubernetes.io/metadata.name == 'ingress-nginx'
     destination:
       ports: [9080]
