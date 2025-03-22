@@ -56,6 +56,8 @@ cat <<EOF | sudo tee /etc/dnsmasq.conf
 # DNS Configuration
 listen-address=127.0.0.1,192.168.10.100
 domain=k8s.lab
+expand-hosts
+local=/k8s.lab/
 
 # Static DNS entries
 address=/k8s-cp.k8s.lab/192.168.10.100
@@ -70,6 +72,16 @@ EOF
 # Start and enable dnsmasq
 sudo systemctl restart dnsmasq
 sudo systemctl enable dnsmasq
+
+# Create proper resolv.conf
+cat <<EOF | sudo tee /etc/resolv.conf
+nameserver 127.0.0.1
+search k8s.lab
+domain k8s.lab
+EOF
+
+# Make resolv.conf immutable to prevent overwriting
+sudo chattr +i /etc/resolv.conf
 
 echo "[TASK 4] Add local DNS entries"
 cat <<EOF | sudo tee -a /etc/hosts

@@ -1,0 +1,17 @@
+# Global security baseline: Default deny all traffic
+apiVersion: projectcalico.org/v3
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: dev1
+spec:
+  tier: default
+  order: 1000
+  selector: all()
+  types:
+  - Ingress
+  - Egress
+  ingress:
+  - action: Deny
+  egress:
+  - action: Deny

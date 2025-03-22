@@ -1,0 +1,159 @@
+# 0. 默认拒绝所有流量 (全局安全基线)
+apiVersion: projectcalico.org/v3
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: dev1
+spec:
+  tier: default
+  order: 1000
+  selector: all()
+  types:
+  - Ingress
+  - Egress
+  ingress:
+  - action: Deny
+  egress:
+  - action: Deny
+
+# 1. 允许 DNS 解析 (所有 Pod 必需)
+apiVersion: projectcalico.org/v3
+kind: NetworkPolicy
+metadata:
+  name: allow-dns
+  namespace: dev1
+spec:
+  tier: default
+  order: 900
+  selector: all()
+  egress:
+  - action: Allow
+    protocol: UDP
+    destination:
+      selector: k8s-app == "kube-dns"
+      namespaceSelector: kubernetes.io/metadata.name == "kube-system"
+      ports: [53]
+  - action: Allow
+    protocol: TCP
+    destination:
+      selector: k8s-app == "kube-dns"
+      namespaceSelector: kubernetes.io/metadata.name == "kube-system"
+      ports: [53]
+
+# 2. 允许 Ingress 访问 productpage
+apiVersion: projectcalico.org/v3
+kind: NetworkPolicy
+metadata:
+  name: allow-ingress-to-productpage
+  namespace: dev1
+spec:
+  tier: default
+  order: 100
+  selector: app == "productpage"
+  ingress:
+  - action: Allow
+    protocol: TCP
+    source:
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: ingress-nginx
+      namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: ingress-nginx
+    destination:
+      ports: [9080]
+
+# 3. productpage 出口规则
+apiVersion: projectcalico.org/v3
+kind: NetworkPolicy
+metadata:
+  name: allow-productpage-out
+  namespace: dev1
+spec:
+  tier: default
+  order: 200
+  selector: app == "productpage"
+  egress:
+  # 允许访问 reviews 所有版本
+  - action: Allow
+    protocol: TCP
+    destination:
+      selector: app == "reviews"
+      ports: [9080]
+  # 允许访问 details
+  - action: Allow
+    protocol: TCP
+    destination:
+      selector: app == "details"
+      ports: [9080]
+
+# 4. reviews 入口规则 (接收 productpage 流量)
+apiVersion: projectcalico.org/v3
+kind: NetworkPolicy
+metadata:
+  name: allow-reviews-in
+  namespace: dev1
+spec:
+  tier: default
+  order: 300
+  selector: app == "reviews"
+  ingress:
+  - action: Allow
+    protocol: TCP
+    source:
+      selector: app == "productpage"
+    destination:
+      ports: [9080]
+
+# 5. details 入口规则
+apiVersion: projectcalico.org/v3
+kind: NetworkPolicy
+metadata:
+  name: allow-details-in
+  namespace: dev1
+spec:
+  tier: default
+  order: 300
+  selector: app == "details"
+  ingress:
+  - action: Allow
+    protocol: TCP
+    source:
+      selector: app == "productpage"
+    destination:
+      ports: [9080]
+
+# 6. reviews v2/v3 出口到 ratings
+apiVersion: projectcalico.org/v3
+kind: NetworkPolicy
+metadata:
+  name: allow-reviews-to-ratings
+  namespace: dev1
+spec:
+  tier: default
+  order: 400
+  selector: app == "reviews" && version in {"v2", "v3"}
+  egress:
+  - action: Allow
+    protocol: TCP
+    destination:
+      selector: app == "ratings"
+      ports: [9080]
+
+# 7. ratings 入口规则
+apiVersion: projectcalico.org/v3
+kind: NetworkPolicy
+metadata:
+  name: allow-ratings-in
+  namespace: dev1
+spec:
+  tier: default
+  order: 500
+  selector: app == "ratings"
+  ingress:
+  - action: Allow
+    protocol: TCP
+    source:
+      selector: app == "reviews" && version in {"v2", "v3"}
+    destination:
+      ports: [9080]

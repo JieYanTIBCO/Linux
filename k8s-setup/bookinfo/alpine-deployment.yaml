@@ -1,0 +1,21 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: alpine-test
+  namespace: dev1
+  labels:
+    app: alpine-test
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: alpine-test
+  template:
+    metadata:
+      labels:
+        app: alpine-test
+    spec:
+      containers:
+      - name: alpine-test
+        image: alpine:3.19
+        command: ["sleep", "3600"]  # 让容器保持运行状态

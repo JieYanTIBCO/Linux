@@ -1,0 +1,17 @@
+# Allow ingress traffic from productpage to details service
+apiVersion: projectcalico.org/v3
+kind: NetworkPolicy
+metadata:
+  name: allow-details-in
+  namespace: dev1
+spec:
+  tier: default
+  order: 300
+  selector: app == "details"
+  ingress:
+  - action: Allow
+    protocol: TCP
+    source:
+      selector: app == "productpage"
+    destination:
+      ports: [9080]

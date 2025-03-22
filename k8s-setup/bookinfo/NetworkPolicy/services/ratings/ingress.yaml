@@ -1,0 +1,17 @@
+# Allow ingress traffic from reviews v2/v3 to ratings service
+apiVersion: projectcalico.org/v3
+kind: NetworkPolicy
+metadata:
+  name: allow-ratings-in
+  namespace: dev1
+spec:
+  tier: default
+  order: 500
+  selector: app == "ratings"
+  ingress:
+  - action: Allow
+    protocol: TCP
+    source:
+      selector: app == "reviews" && version in {"v2", "v3"}
+    destination:
+      ports: [9080]

@@ -1,0 +1,23 @@
+# Allow productpage to access reviews and details services
+apiVersion: projectcalico.org/v3
+kind: NetworkPolicy
+metadata:
+  name: allow-productpage-out
+  namespace: dev1
+spec:
+  tier: default
+  order: 200
+  selector: app == "productpage"
+  egress:
+  # Allow access to all reviews versions
+  - action: Allow
+    protocol: TCP
+    destination:
+      selector: app == "reviews"
+      ports: [9080]
+  # Allow access to details service
+  - action: Allow
+    protocol: TCP
+    destination:
+      selector: app == "details"
+      ports: [9080]

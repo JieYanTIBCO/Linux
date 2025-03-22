@@ -1,0 +1,17 @@
+# Allow ingress traffic from productpage to reviews service
+apiVersion: projectcalico.org/v3
+kind: NetworkPolicy
+metadata:
+  name: allow-reviews-in
+  namespace: dev1
+spec:
+  tier: default
+  order: 300
+  selector: app == "reviews"
+  ingress:
+  - action: Allow
+    protocol: TCP
+    source:
+      selector: app == "productpage"
+    destination:
+      ports: [9080]

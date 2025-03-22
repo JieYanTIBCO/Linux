@@ -1,89 +1,109 @@
 #!/bin/bash
-# 文件名: set-static-ip.sh
-# 用途: 备份当前网络配置 → 禁用 DHCP → 设置静态 IP → 保留其他参数
-# 执行权限: sudo required
-# 用法: sudo ./set-static-ip.sh <接口名> <新IP/CIDR>
+# Filename: set-static-ip.sh
+# Purpose: Backup current network config → Disable DHCP → Set static IP → Preserve other parameters
+# Permissions: sudo required
+# Usage: sudo ./set-static-ip.sh <interface> <new-IP/CIDR>
 
-set -eo pipefail  # 严格错误检查
+# Create log file with timestamp
+LOG_FILE="setup.log"
+echo "=== Static IP Setup started at $(date) ===" >> $LOG_FILE
+
+# Send output to both console and log file
+exec > >(tee -a $LOG_FILE) 2>&1
+
+set -eo pipefail  # Strict error checking
 
 # =====================
-# 函数定义
+# Function Definitions
 # =====================
 
-# 优雅退出函数
+# Clean exit function
 clean_exit() {
   local exit_code=$1
   shift
-  echo -e "\n❌ 错误: $*" >&2
+  echo -e "\n❌ Error: $*" >&2
+  echo "=== Setup failed at $(date) with error: $* ===" >> $LOG_FILE
   exit $exit_code
 }
 
-# 获取当前网络参数
+# Get current network parameters
 get_current_config() {
   local interface=$1
   local config_file=$2
   
-  echo "正在检查配置文件: $config_file"
+  echo "Checking config file: $config_file"
   
-  # 检查配置文件是否存在
+  # Check if config file exists
   if [ ! -f "$config_file" ]; then
-    clean_exit 1 "配置文件不存在: $config_file"
+    clean_exit 1 "Config file does not exist: $config_file"
   fi
   
-  # 显示配置文件内容用于调试
-  echo "配置文件内容:"
+  # Display config file for debugging
+  echo "Config file content:"
   cat "$config_file"
   echo ""
   
-  # 提取当前IP地址
+  # Extract current IP address
   current_ip=$(ip -4 addr show "$interface" | grep -w inet | awk '{print $2}')
-  echo "当前IP地址: $current_ip"
+  echo "Current IP: $current_ip"
   
-  # 从路由表获取网关
+  # Get default gateway from routing table
   current_gateway=$(ip route show default | awk '/default/ {print $3}')
-  echo "从路由表获取的网关: $current_gateway"
+  echo "Gateway from routing table: $current_gateway"
   
-  # 从resolv.conf获取DNS
-  current_dns=$(grep nameserver /etc/resolv.conf | awk '{print $2}' | head -1)
-  echo "从resolv.conf获取的DNS: $current_dns"
+  # Get DNS servers using resolvectl (more accurate method)
+  echo "Retrieving DNS server info..."
+  if command -v resolvectl &> /dev/null; then
+    # Get DNS server for the specific interface
+    current_dns=$(resolvectl status "$interface" | grep "Current DNS Server:" | awk '{print $4}')
+    if [ -z "$current_dns" ]; then
+      # If no interface-specific DNS found, try to get any DNS server
+      current_dns=$(resolvectl status | grep "DNS Servers:" | head -1 | awk '{print $3}')
+    fi
+    echo "DNS from resolvectl: $current_dns"
+  else
+    # Fall back to resolv.conf if resolvectl is unavailable
+    current_dns=$(grep nameserver /etc/resolv.conf | awk '{print $2}' | head -1)
+    echo "DNS from resolv.conf: $current_dns (resolvectl unavailable)"
+  fi
   
-  # 提取DHCP设置
+  # Extract DHCP settings
   current_dhcp=$(grep -A3 "$interface:" "$config_file" | grep -E 'dhcp4:|dhcp:' | head -1 | sed -E 's/.*dhcp4:|dhcp:[ ]*(true|false|yes|no).*/\1/')
-  echo "DHCP状态: $current_dhcp"
+  echo "DHCP status: $current_dhcp"
   
-  # 容错处理
+  # Error handling
   if [ -z "$current_gateway" ]; then
-    clean_exit 1 "无法获取网关，请确认网络连接正常或手动指定网关"
+    clean_exit 1 "Unable to detect gateway, please check network connection or specify manually"
   fi
   
   if [ -z "$current_dns" ]; then
-    # 尝试使用常见的DNS服务器
+    # Use common DNS server as fallback
     current_dns="8.8.8.8"
-    echo "未找到DNS服务器，使用默认值: $current_dns"
+    echo "No DNS server found, using default: $current_dns"
   fi
   
-  # 显示提取到的网络参数
-  echo -e "\n📊 当前网络参数:"
+  # Display extracted network parameters
+  echo -e "\n📊 Current Network Parameters:"
   echo "========================"
-  echo "接口: $interface"
-  echo "IP地址: $current_ip"
-  echo "网关: $current_gateway"
-  echo "DNS服务器: $current_dns"
-  echo "DHCP状态: $current_dhcp"
+  echo "Interface: $interface"
+  echo "IP Address: $current_ip"
+  echo "Gateway: $current_gateway"
+  echo "DNS Server: $current_dns"
+  echo "DHCP Status: $current_dhcp"
   echo "========================\n"
 }
 
 # =====================
-# 主程序
+# Main Program
 # =====================
 
-# 检查 root 权限
-[ "$EUID" -ne 0 ] && clean_exit 1 "必须使用 sudo 执行"
+# Check root privileges
+[ "$EUID" -ne 0 ] && clean_exit 1 "Must be run with sudo"
 
-# 参数验证
+# Parameter validation
 if [ $# -ne 2 ]; then
-  echo "用法: $0 <网络接口> <IP地址/CIDR>"
-  echo "示例: $0 ens33 192.168.2.100/24"
+  echo "Usage: $0 <interface> <IP-address/CIDR>"
+  echo "Example: $0 ens33 192.168.10.101/24"
   exit 1
 fi
 
@@ -92,51 +112,111 @@ NEW_IP=$2
 CONFIG_FILE=$(ls /etc/netplan/*.yaml | head -n1)
 BACKUP_FILE="${CONFIG_FILE}.bak-$(date +%Y%m%d%H%M%S)"
 
-# 第一步: 备份当前配置
-echo "🔧 正在备份网络配置..."
-cp -v "$CONFIG_FILE" "$BACKUP_FILE" || clean_exit 1 "备份失败"
+# Check subnet compatibility
+NEW_IP_NETWORK=$(echo $NEW_IP | cut -d'.' -f1-3)
+GATEWAY=$(ip route show default | awk '/default/ {print $3}')
+GATEWAY_NETWORK=$(echo $GATEWAY | cut -d'.' -f1-3)
 
-# 获取当前参数
-echo "📡 正在提取当前网络参数..."
+echo "Checking IP subnet compatibility..."
+if [ "$NEW_IP_NETWORK" != "$GATEWAY_NETWORK" ]; then
+  echo "⚠️ WARNING: Your new IP ($NEW_IP_NETWORK.x) is not in the same subnet as your gateway ($GATEWAY_NETWORK.x)"
+  echo "This may cause connectivity issues. It is recommended to use an IP in the $GATEWAY_NETWORK.x subnet."
+  read -p "Continue anyway? (y/n): " confirm
+  if [[ ! $confirm =~ ^[Yy]$ ]]; then
+    clean_exit 0 "Operation canceled by user"
+  fi
+  echo "Proceeding with configuration despite subnet mismatch..."
+fi
+
+# Step 1: Backup current configuration
+echo "🔧 Backing up network configuration..."
+cp -v "$CONFIG_FILE" "$BACKUP_FILE" || clean_exit 1 "Backup failed"
+
+# Get current parameters
+echo "📡 Extracting current network parameters..."
 get_current_config "$INTERFACE" "$CONFIG_FILE"
 
-# 第二步: 生成新配置
-echo "⚙️ 生成新配置..."
+# Step 2: Generate new configuration
+echo "⚙️ Generating new configuration..."
 cat > "$CONFIG_FILE" <<EOF
-# 配置于 $(date)
+# Configured on $(date)
 network:
   version: 2
   renderer: networkd
   ethernets:
     $INTERFACE:
-      dhcp4: false     # 禁用 DHCP
+      dhcp4: false     # Disable DHCP
       dhcp6: false
       addresses:
-        - $NEW_IP      # 设置新 IP
+        - $NEW_IP      # Set new IP
       routes:
         - to: default
-          via: $current_gateway  # 保留原网关
+          via: $current_gateway  # Keep original gateway
       nameservers:
-        addresses: [$current_dns]  # 保留原 DNS
+        addresses: []  # Keep original DNS
 EOF
 
-# 第三步: 应用配置
-echo "🚀 应用新配置..."
-chmod 600 "$CONFIG_FILE"
-if ! netplan apply; then
-  echo "‼️ 配置应用失败，正在回滚..."
+# Step 3: Apply configuration with timeout
+echo "🚀 Applying new configuration..."
+echo "This may take a moment, please wait..."
+sudo chmod 600 "$CONFIG_FILE"
+
+# Use timeout command to prevent hanging
+echo "Running netplan apply with 30 second timeout..."
+if ! timeout 30 netplan apply; then
+  echo "‼️ Configuration application timed out or failed, rolling back..."
   cp -f "$BACKUP_FILE" "$CONFIG_FILE"
   netplan apply
-  clean_exit 1 "网络配置回滚完成"
+  clean_exit 1 "Network configuration rolled back after timeout or failure"
 fi
 
-# 第四步: 验证结果并显示新配置
-echo -e "\n✅ 配置完成！新网络参数："
+# Brief pause to allow network to stabilize
+echo "Waiting for network to stabilize..."
+sleep 5
+
+# Step 4: Verify results and display new configuration
+echo -e "\n✅ Configuration complete! New network parameters:"
 echo "========================"
-# 显示新的IP地址
-new_actual_ip=$(ip -4 addr show "$INTERFACE" | grep -w inet | awk '{print $2}')
-echo "接口: $INTERFACE"
-echo "新IP地址: $new_actual_ip (配置为: $NEW_IP)"
-echo "默认网关: $(ip route show default | awk '{print $3}')"
-echo "DNS 服务器: $(grep nameserver /etc/resolv.conf | awk '{print $2}' | head -1)"
+
+# Show new IP address
+new_actual_ip=$(ip -4 addr show "$INTERFACE" | grep -w inet | awk '{print $2}' || echo "Not available")
+echo "Interface: $INTERFACE"
+echo "New IP Address: $new_actual_ip (Configured as: $NEW_IP)"
+echo "Default Gateway: $(ip route show default | awk '{print $3}' || echo "Not available")"
+echo "DNS Server: $(grep nameserver /etc/resolv.conf | awk '{print $2}' | head -1 || echo "Not available")"
 echo "========================"
+
+# Test network connectivity
+echo -e "\n🔍 Testing network connectivity:"
+echo "========================"
+echo "Pinging gateway..."
+if ping -c 2 $current_gateway &>/dev/null; then
+  echo "✅ Gateway reachable: $current_gateway"
+else
+  echo "❌ Cannot reach gateway: $current_gateway"
+  echo "Network connectivity issues detected. You may need to rollback:" | tee -a $LOG_FILE
+  echo "sudo cp $BACKUP_FILE $CONFIG_FILE && sudo netplan apply" | tee -a $LOG_FILE
+fi
+
+echo "Pinging DNS server..."
+if ping -c 2 $current_dns &>/dev/null; then
+  echo "✅ DNS server reachable: $current_dns"
+else
+  echo "❌ Cannot reach DNS server: $current_dns"
+fi
+
+echo "Pinging internet (8.8.8.8)..."
+if ping -c 2 8.8.8.8 &>/dev/null; then
+  echo "✅ Internet connectivity: OK"
+else
+  echo "❌ Cannot reach internet"
+fi
+echo "========================"
+
+# Record completion in log
+echo "=== Static IP Setup completed at $(date) ===" >> $LOG_FILE
+echo "Log saved to: $LOG_FILE"
+
+# Provide rollback instructions
+echo -e "\n📝 If you experience connectivity issues, restore the backup with:"
+echo "sudo cp $BACKUP_FILE $CONFIG_FILE && sudo netplan apply"

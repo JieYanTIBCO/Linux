@@ -1,0 +1,22 @@
+# Allow ingress traffic from ingress-nginx to productpage
+apiVersion: projectcalico.org/v3
+kind: NetworkPolicy
+metadata:
+  name: allow-ingress-to-productpage
+  namespace: dev1
+spec:
+  tier: default
+  order: 100
+  selector: app == "productpage"
+  ingress:
+  - action: Allow
+    protocol: TCP
+    source:
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: ingress-nginx
+      namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: ingress-nginx
+    destination:
+      ports: [9080]
