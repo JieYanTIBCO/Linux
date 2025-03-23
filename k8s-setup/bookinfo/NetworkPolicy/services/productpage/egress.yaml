@@ -9,19 +9,32 @@ spec:
   order: 200
   selector: app == "productpage"
   egress:
-  # Allow access to reviews service
+  # Allow Pod-to-Pod direct access
+  - action: Allow
+    protocol: TCP
+    destination:
+      selector: app == "reviews" 
+      namespaceSelector: name == "dev1"
+      ports: [9080]  
+  
+  - action: Allow
+    protocol: TCP
+    destination:
+      selector: app == "details"
+      namespaceSelector: name == "dev1"
+      ports: [9080]
+      
+  # Allow Service-based access
   - action: Allow
     protocol: TCP
     destination:
       services:
         name: reviews
         namespace: dev1
-      ports: [9080]
-  # Allow access to details service  
+        
   - action: Allow
     protocol: TCP
     destination:
       services:
         name: details
         namespace: dev1
-      ports: [9080]

@@ -9,11 +9,19 @@ spec:
   order: 300
   selector: app == "details"
   ingress:
-  - action: Allow
-    protocol: TCP
-    source:
-      services:
-        name: productpage
-        namespace: dev1
-    destination:
-      ports: [9080]
+    - action: Allow
+      protocol: TCP
+      source:
+        selector: app == "productpage"
+        namespaceSelector: name == "dev1"  # Changed from 'namespace: dev1'
+      destination:
+        ports: [9080]
+
+    - action: Allow
+      protocol: TCP
+      source:
+        services:
+          name: productpage
+          namespace: dev1  # This is correct
+      destination:
+        ports: [9080]
