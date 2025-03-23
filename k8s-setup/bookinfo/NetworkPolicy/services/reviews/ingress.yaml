@@ -17,3 +17,12 @@ spec:
         namespace: dev1
     destination:
       ports: [9080]
+      
+  # Allow direct pod-to-pod access
+  - action: Allow
+    protocol: TCP
+    source:
+      selector: app == "productpage"
+      namespaceSelector: name == "dev1"
+    destination:
+      ports: [9080]

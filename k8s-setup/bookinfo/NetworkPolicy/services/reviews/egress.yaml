@@ -9,9 +9,18 @@ spec:
   order: 400
   selector: app == "reviews" && version in {"v2", "v3"}
   egress:
+  # Allow access to ratings service
   - action: Allow
     protocol: TCP
     destination:
       services:
         name: ratings
         namespace: dev1
+        
+  # Allow direct pod-to-pod access
+  - action: Allow
+    protocol: TCP
+    destination:
+      selector: app == "ratings"
+      namespaceSelector: name == "dev1"
+      ports: [9080]
